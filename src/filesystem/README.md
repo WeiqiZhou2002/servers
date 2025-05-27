@@ -243,6 +243,7 @@ actions:
 
   delete:
     enabled: false
+```
 
 *If no YAML is found the server prints a warning and falls back to permissive defaults (all actions allowed).*
 
