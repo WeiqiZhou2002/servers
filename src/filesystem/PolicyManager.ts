@@ -1,24 +1,25 @@
 import fs from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
-import { addDays, isAfter } from "date-fns";
-import { toZonedTime } from "date-fns-tz";
 import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export type Action = "read" | "write" | "delete";
-interface ActionRule { enabled?: boolean; max_future_days?: number }
+interface ActionRule { 
+  enabled?: boolean; 
+  allowed_extensions?: string[];            // default: any
+  allowed_paths?: string[];                 // default: any
+ }
 interface PolicyFile {
   timezone?: string;
   actions?: Record<Action, ActionRule>;
-  calendars?: { whitelist?: string[] };
 }
 
 const ENV_PATH = process.env.MCP_POLICY_FILE;
 
-const FALLBACK_PATH = path.resolve(__dirname,  "..", "src", "policy.yml");
+const FALLBACK_PATH = path.resolve(__dirname,  "..",  "policy.yml");
 const CONFIG_PATH = ENV_PATH ?? FALLBACK_PATH;
 
 function safeLoad(file?: string): PolicyFile {
@@ -35,6 +36,8 @@ function safeLoad(file?: string): PolicyFile {
   }
 }
 
+const normalizeExt = (ext: string) => ext.toLowerCase();
+
 export class PolicyManager {
   private static policy: PolicyFile = safeLoad(CONFIG_PATH);
 
@@ -42,7 +45,7 @@ export class PolicyManager {
    * Enforce the current YAML rules against an action.  Throws 403‑style
    * Error with code="MCP_POLICY_VIOLATION" if disallowed.
    */
-  static enforce(action: Action, opts: { start?: Date; end?: Date; calendarId?: string }) {
+  static enforce(action: Action, filePath: string) {
     const rule = this.policy.actions?.[action] ?? {};
 
     /* 1. enabled flag */
@@ -50,41 +53,15 @@ export class PolicyManager {
       throw this.err(`Action '${action}' disabled by policy`);
     }
 
-    /* 2. maximum future window */
-    if (rule.max_future_days !== undefined && opts.start) {
-      const horizon = addDays(toZonedTime(new Date(), this.tz()), rule.max_future_days);
-      if (isAfter(opts.start, horizon)) {
-        throw this.err(
-          `${action} denied: ${opts.start.toISOString()} beyond ` +
-          `${rule.max_future_days}‑day window`
-        );
-      }
-      
-      if(opts.end !== undefined && isAfter(opts.end,horizon)){
-        if (action === "read") {
-          const err = Object.assign(
-            new Error(`${action} end beyond horizon`),
-            {
-              code: "MCP_READ_CLIPPED",
-              horizon,
-              httpStatus: 400,
-            }
-          );
-          throw err;
-        } else {
-          throw this.err(`${action} denied: end beyond ${rule.max_future_days}‑day window`);
-        }
-      }
-    }
+   /* 2 — extension checks */
+   if (rule.allowed_extensions?.length) {
+    const ext = normalizeExt(path.extname(filePath));
+    const ok  = rule.allowed_extensions.map(normalizeExt).includes(ext);
+    if (!ok) throw this.err(`${action} denied: extension '${ext}' not allowed`);
+  }
 
-   //TODO: enforce calendar access
-    if (this.policy.calendars?.whitelist && opts.calendarId) {
-      if (!this.policy.calendars.whitelist.includes(opts.calendarId)) {
-        throw this.err(
-          `${action} denied: calendar '${opts.calendarId}' not whitelisted`
-        );
-      }
-    }
+   //TODO:path checks 
+    
   }
 
   private static tz() {

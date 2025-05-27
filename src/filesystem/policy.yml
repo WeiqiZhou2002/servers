@@ -1,0 +1,18 @@
+actions:
+  read:
+    enabled: true
+    allowed_extensions:
+      - .png
+      - .jpg
+      - .jpeg
+
+  write:
+    enabled: true
+    allowed_extensions:
+      - .png
+      - .jpg
+      - .jpeg
+      - .txt
+
+  delete:
+    enabled: false 

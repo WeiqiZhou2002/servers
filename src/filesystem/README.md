@@ -209,6 +209,51 @@ Docker build:
 docker build -t mcp/filesystem -f src/filesystem/Dockerfile .
 ```
 
+## Policy Configuration (`policy.yml`)
+
+The server can enforce a runtime policy file that whitelists or disables certain operations.  
+If present, the file **`policy.yml`** (or the file specified via the environment variable `MCP_POLICY_FILE`) is parsed on start‑up **and re‑loaded automatically on change** – no restart required.
+
+### 1  Where does the file live?
+
+| Location                       | How to change                                                                |
+| ------------------------------ | ---------------------------------------------------------------------------- |
+| **Default** → `/policy.yml`    | No action needed; the server loads it automatically.                      |
+| Custom path                    | Set an env‑var before you start the server:<br>`export MCP_POLICY_FILE=/path/to/my_policy.yml` |
+
+> **Hot‑reload** The file is watched; save a change and it takes effect within a second (no restart).
+
+### 2  YAML schema
+
+```yaml
+# src/config/policy.yml
+actions:
+  read:                           # Action key: read | write | delete
+    enabled: true                 # (default: true) – set to false to block entirely
+    allowed_extensions:           # Optional allow‑list (case‑insensitive)
+      - .png
+      - .jpg
+      - .jpeg  
+    allowed_paths:                # Optional allow‑list (absolute or glob)
+      - "/projects/docs"
+      - "/projects/**/*.md"
+
+  write:
+    enabled: false                # Disables all write operations
+
+  delete:
+    enabled: false
+
+*If no YAML is found the server prints a warning and falls back to permissive defaults (all actions allowed).*
+
+
+### 3  What happens if a request violates the policy?
+
+* The MCP server throws an error with `code: "MCP_POLICY_VIOLATION"` (HTTP 403).  
+  *Example message:* `Action 'write' disabled by policy`.
+* LLM clients can catch that error and ask the user for a new action.
+
+
 ## License
 
 This MCP server is licensed under the MIT License. This means you are free to use, modify, and distribute the software, subject to the terms and conditions of the MIT License. For more details, please see the LICENSE file in the project repository.

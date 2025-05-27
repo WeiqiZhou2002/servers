@@ -14,6 +14,7 @@ import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { diffLines, createTwoFilesPatch } from 'diff';
 import { minimatch } from 'minimatch';
+import { PolicyManager } from "./PolicyManager.js";
 
 // Command line argument parsing
 const args = process.argv.slice(2);
@@ -451,6 +452,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new Error(`Invalid arguments for read_file: ${parsed.error}`);
         }
         const validPath = await validatePath(parsed.data.path);
+        await PolicyManager.enforce("read", validPath);
         const content = await fs.readFile(validPath, "utf-8");
         return {
           content: [{ type: "text", text: content }],
@@ -466,6 +468,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           parsed.data.paths.map(async (filePath: string) => {
             try {
               const validPath = await validatePath(filePath);
+              await PolicyManager.enforce("read", validPath);
               const content = await fs.readFile(validPath, "utf-8");
               return `${filePath}:\n${content}\n`;
             } catch (error) {
@@ -485,6 +488,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new Error(`Invalid arguments for write_file: ${parsed.error}`);
         }
         const validPath = await validatePath(parsed.data.path);
+        await PolicyManager.enforce("write", validPath);
         await fs.writeFile(validPath, parsed.data.content, "utf-8");
         return {
           content: [{ type: "text", text: `Successfully wrote to ${parsed.data.path}` }],
@@ -497,6 +501,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new Error(`Invalid arguments for edit_file: ${parsed.error}`);
         }
         const validPath = await validatePath(parsed.data.path);
+        await PolicyManager.enforce("write", validPath);
         const result = await applyFileEdits(validPath, parsed.data.edits, parsed.data.dryRun);
         return {
           content: [{ type: "text", text: result }],
@@ -579,7 +584,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new Error(`Invalid arguments for move_file: ${parsed.error}`);
         }
         const validSourcePath = await validatePath(parsed.data.source);
+        await PolicyManager.enforce("read", validSourcePath);
         const validDestPath = await validatePath(parsed.data.destination);
+        await PolicyManager.enforce("write", validDestPath);
         await fs.rename(validSourcePath, validDestPath);
         return {
           content: [{ type: "text", text: `Successfully moved ${parsed.data.source} to ${parsed.data.destination}` }],
