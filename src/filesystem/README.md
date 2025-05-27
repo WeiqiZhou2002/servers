@@ -226,7 +226,6 @@ If present, the file **`policy.yml`** (or the file specified via the environment
 ### 2  YAML schema
 
 ```yaml
-# src/config/policy.yml
 actions:
   read:                           # Action key: read | write | delete
     enabled: true                 # (default: true) – set to false to block entirely
